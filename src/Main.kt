@@ -1,6 +1,7 @@
 import com.google.gson.Gson
-import sun.rmi.runtime.Log
 import java.io.File
+import java.lang.Integer.max
+import java.lang.Integer.min
 
 fun main (args : Array<String>){
 
@@ -37,7 +38,7 @@ fun main (args : Array<String>){
 
                 //Tags
                 for (item in tabLine){
-                    if (j>0){
+                    if (j>=0){
                         var tag = listOfTag.get(item)
                         if (tag == null) {
                             tag = Tag(id++, arrayListOf(), item)
@@ -61,9 +62,16 @@ fun main (args : Array<String>){
 
 
 
+    fun score(slide1: Slide, slide2: Slide): Int {
+        var a = slide1.tags().minus(slide2.tags()).size
+        var b = slide2.tags().minus(slide1.tags()).size
+        var c = slide1.tags().intersect(slide2.tags()).size
+        return minOf(a,b,c)
+    }
+
     //Somme des tags par photos
 
-    fun algo(dataIn: DataIn) : DataOut {
+    fun algo1(dataIn: DataIn) : DataOut {
 
         val list = mutableListOf<Slide>()
         for (pic in dataIn.photo)
@@ -76,11 +84,68 @@ fun main (args : Array<String>){
         return DataOut(list)
     }
 
-    fun score(slide1: Slide, slide2: Slide): Int {
-        var a = slide1.tags().minus(slide2.tags()).size
-        var b = slide2.tags().minus(slide1.tags()).size
-        var c = slide1.tags().intersect(slide2.tags()).size
-        return minOf(a,b,c)
+    fun algo2(dataIn: DataIn) : DataOut {
+
+        val list = mutableListOf<Slide>()
+        var temp : Picture? = null
+        for (pic in dataIn.photo)
+        {
+            if (pic.orientation) {
+                list.add(Slide(pic))
+            }
+            else if (temp != null) {
+                list.add(Slide(temp,pic))
+                temp = null
+            }
+            else {
+                temp = pic
+            }
+        }
+
+        return DataOut(list)
+    }
+
+    fun algo(dataIn: DataIn) : DataOut {
+
+        val tempList = mutableListOf<Slide>()
+        val finalList = mutableListOf<Slide>()
+        var temp : Picture? = null
+        for (pic in dataIn.photo.sortedByDescending { it.tags.size })
+        {
+            if (pic.orientation) {
+                tempList.add(Slide(pic))
+            }
+            else if (temp != null) {
+                tempList.add(Slide(temp!!,pic))
+                temp = null
+            }
+            else {
+                temp = pic
+            }
+        }
+        tempList.sortByDescending { it.tags().size }
+
+        var count = tempList.size / 1000
+
+        var i=0
+        while (i< count) {
+            var truncateList = tempList.take(min(1000,tempList.size)).toMutableList()
+            tempList.removeAll(truncateList)
+
+            var previous = truncateList.first()
+            truncateList.remove(previous)
+            while (truncateList.isNotEmpty()){
+                finalList.add(previous)
+                previous = truncateList.maxBy { score(it, previous) }!!
+                truncateList.remove(previous)
+            }
+            finalList.add(previous)
+
+            println(i++)
+
+        }
+
+        return DataOut(finalList)
     }
 
     fun score(dataOut: DataOut) : Int {
@@ -91,7 +156,7 @@ fun main (args : Array<String>){
         var total = 0
         for (slide in dataOut.slideshow) {
             if (previous != null) {
-                total += score(previous, slide)
+                total += score(previous!!, slide)
             }
             previous = slide
         }
@@ -99,7 +164,7 @@ fun main (args : Array<String>){
     }
 
     fun parseOut(dataOut: DataOut): String {
-        return dataOut.slideshow.joinToString("\n") {
+        return "${dataOut.slideshow.size}\n" + dataOut.slideshow.joinToString("\n") {
             "${it.pic1.id} ${it.pic2?.id?:""}".trim()
         }
     }
